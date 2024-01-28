@@ -81,9 +81,8 @@ def order():
         price += r["quantity"]*product.price
         num += 1
 
-    price = 0
-    products = list()
-    order = Order(email=get_jwt_identity(), price=price, status="created")
+
+    order = Order(email=get_jwt_identity(), price=price, status="CREATED")
     database.session.add(order)
     database.session.commit()
     for r in requests:
@@ -92,6 +91,30 @@ def order():
     database.session.commit()
 
     return {"id": order.id}, 200
+
+@application.route('/status', methods=['GET'])
+@jwt_required()
+def status():
+    claims = get_jwt()
+    if "user_type" not in claims or claims["user_type"] != "customer":
+        return {"msg": "Missing Authorization Header"}, 401
+
+    #orders = Order.query.join(OrderProduct, OrderProduct.orderId == Order.id). \
+    #    join(Product, Product.id == OrderProduct.productId).filter(Order.email == get_jwt_identity()).all()
+
+    orders = Order.query.filter(Order.email == get_jwt_identity()).all()
+    return {"orders": [{
+        "products": [
+            {
+                "categories": [cat.name for cat in product.categories],
+                "name": product.name,
+                "price": product.price,
+                "quantity": OrderProduct.query.filter(OrderProduct.orderId == order.id, OrderProduct.productId == product.id).first().quantity
+            } for product in order.products],
+        "price": order.price,
+        "status": order.status,
+        "timestamp": order.time.isoformat()
+    } for order in orders]}, 200
 
 
 
