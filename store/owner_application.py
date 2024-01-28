@@ -33,7 +33,6 @@ def update():
         row = row.split(",")
         if len(row) != 3:
             return {"message": f"Incorrect number of values on line {i}."}, 400
-
         try:
             if float(row[2]) <= 0:
                 return {"message": f"Incorrect price on line {i}."}, 400

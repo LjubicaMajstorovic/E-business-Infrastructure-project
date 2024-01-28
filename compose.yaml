@@ -83,6 +83,18 @@ services:
     depends_on:
       migrationStoreDB:
         condition: service_completed_successfully
+  storeCourier:
+    image: courier_store
+    environment:
+      - PRODUCTION=True
+      - DATABASE_URL=storedb
+      - DATABASE_USERNAME=root
+      - DATABASE_PASSWORD=root
+    ports:
+      - 5003:5003
+    depends_on:
+      migrationStoreDB:
+        condition: service_completed_successfully
 
 
 

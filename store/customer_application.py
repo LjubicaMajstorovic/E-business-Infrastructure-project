@@ -81,7 +81,6 @@ def order():
         price += r["quantity"]*product.price
         num += 1
 
-
     order = Order(email=get_jwt_identity(), price=price, status="CREATED")
     database.session.add(order)
     database.session.commit()
@@ -117,9 +116,23 @@ def status():
     } for order in orders]}, 200
 
 
+@application.route('/delivered', methods=['POST'])
+@jwt_required()
+def delivered():
+    claims = get_jwt()
+    if "user_type" not in claims or claims["user_type"] != "customer":
+        return {"msg": "Missing Authorization Header"}, 401
+    if "id" not in request.json:
+        return {"message": "Missing order id."}, 400
+    if type(request.json["id"]) is not int:
+        return {"message": "Invalid order id."}, 400
+    order = Order.query.filter(Order.id == request.json["id"]).first()
+    if int(request.json["id"]) <= 0 or order is None or (order is not None and order.status != "PENDING"):
+        return {"message": "Invalid order id."}, 400
 
-
-
+    order.status = "COMPLETE"
+    database.session.commit()
+    return {}, 200
 
 
 if __name__ == "__main__":
