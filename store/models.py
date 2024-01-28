@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+import datetime
 
 database = SQLAlchemy()
 
@@ -44,8 +45,7 @@ class Order(database.Model):
     id = database.Column(database.Integer, primary_key=True)
     status = database.Column(database.String(15), nullable=False)
     price = database.Column(database.Float, nullable=False)
-    time = database.Column(database.DateTime, nullable=False)
+    time = database.Column(database.DateTime, nullable=False, default=datetime.datetime.utcnow)
     email = database.Column(database.String(256), nullable=False)
-
 
     products = database.relationship("Product", secondary=OrderProduct.__table__, back_populates="orders")

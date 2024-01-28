@@ -17,6 +17,7 @@ jwt = JWTManager(application)
 @jwt_required()
 def update():
     claims = get_jwt()
+    email = get_jwt_identity()
     if "user_type" not in claims or claims["user_type"] != "owner":
         return {"msg": "Missing Authorization Header"}, 401
 

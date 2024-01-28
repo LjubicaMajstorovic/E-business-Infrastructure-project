@@ -11,8 +11,6 @@ application.config.from_object(Configuration)
 jwt = JWTManager(application)
 
 
-
-
 @application.route('/search', methods=['GET'])
 @jwt_required()
 def search():
@@ -51,6 +49,51 @@ def search():
                 "name": product.name,
                 "price": product.price
             } for product in products]}, 200
+
+
+@application.route('/order', methods=['POST'])
+@jwt_required()
+def order():
+    claims = get_jwt()
+    if "user_type" not in claims or claims["user_type"] != "customer":
+        return {"msg": "Missing Authorization Header"}, 401
+    if "requests" not in request.json:
+        return {"message": "Field requests is missing."}, 400
+    requests = request.json["requests"]
+    num = 0
+    price = 0
+    for r in requests:
+        if "id" not in r:
+            return {"message": f"Product id is missing for request number {num}."}, 400
+        if "quantity" not in r:
+            return {"message": f"Product quantity is missing for request number {num}."}, 400
+        if type(r["id"]) is not int:
+            return {"message": f"Invalid product id for request number {num}."}, 400
+        if r["id"] <= 0:
+            return {"message": f"Invalid product id for request number {num}."}, 400
+        if type(r["quantity"]) is not int:
+            return {"message": f"Invalid product quantity for request number {num}."}, 400
+        if r["quantity"] <= 0:
+            return {"message": f"Invalid product quantity for request number {num}."}, 400
+        product = Product.query.filter(Product.id == r["id"]).first()
+        if product is None:
+            return {"message": f"Invalid product for request number {num}."}, 400
+        price += r["quantity"]*product.price
+        num += 1
+
+    price = 0
+    products = list()
+    order = Order(email=get_jwt_identity(), price=price, status="created")
+    database.session.add(order)
+    database.session.commit()
+    for r in requests:
+        ordPro = OrderProduct(productId=r["id"], orderId=order.id, quantity=r["quantity"])
+        database.session.add(ordPro)
+    database.session.commit()
+
+    return {"id": order.id}, 200
+
+
 
 
 
