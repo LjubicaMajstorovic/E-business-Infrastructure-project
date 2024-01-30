@@ -12,10 +12,17 @@ services:
       start_period: 40s
       retries: 25
       timeout: 25s
+    networks:
+      - authnet
+    volumes:
+      - authvol:/var/lib/mysql
   adminer:
     image: adminer
     ports:
       - 8083:8080
+    networks:
+      - authnet
+      - shopnet
   authentication:
     image: authentication
     environment:
@@ -28,6 +35,8 @@ services:
     depends_on:
       migration:
         condition: service_completed_successfully
+    networks:
+      - authnet
   migration:
     image: migration
     environment:
@@ -38,6 +47,8 @@ services:
     depends_on:
       authenticationDB:
         condition: service_healthy
+    networks:
+      - authnet
   storedb:
     image: mysql
     environment:
@@ -49,6 +60,10 @@ services:
       start_period: 40s
       retries: 25
       timeout: 25s
+    networks:
+      - shopnet
+    volumes:
+      - shopvol:/var/lib/mysql
   storeOwner:
     image: owner_application
     environment:
@@ -61,6 +76,8 @@ services:
     depends_on:
       migrationStoreDB:
         condition: service_completed_successfully
+    networks:
+      - shopnet
   migrationStoreDB:
     image: migration_storedb
     environment:
@@ -71,6 +88,8 @@ services:
     depends_on:
       storedb:
         condition: service_healthy
+    networks:
+      - shopnet
   storeCustomer:
     image: customer_store
     environment:
@@ -83,6 +102,8 @@ services:
     depends_on:
       migrationStoreDB:
         condition: service_completed_successfully
+    networks:
+      - shopnet
   storeCourier:
     image: courier_store
     environment:
@@ -95,6 +116,16 @@ services:
     depends_on:
       migrationStoreDB:
         condition: service_completed_successfully
+    networks:
+      - shopnet
+
+volumes:
+  authvol:
+  shopvol:
+
+networks:
+  authnet:
+  shopnet:
 
 
 
