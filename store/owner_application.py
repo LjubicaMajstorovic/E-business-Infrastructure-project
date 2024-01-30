@@ -1,9 +1,9 @@
 import csv, io
 from flask import Flask, request, Response
 from configuration import Configuration
-from models import database, Product, Category, CategoryProduct
+from models import database, Product, Category, CategoryProduct, OrderProduct, Order
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
-from sqlalchemy import and_
+from sqlalchemy import func, case, desc
 
 application = Flask(__name__)
 application.config.from_object(Configuration)
@@ -11,13 +11,10 @@ application.config.from_object(Configuration)
 jwt = JWTManager(application)
 
 
-
-
 @application.route("/update", methods=["POST"])
 @jwt_required()
 def update():
     claims = get_jwt()
-    email = get_jwt_identity()
     if "user_type" not in claims or claims["user_type"] != "owner":
         return {"msg": "Missing Authorization Header"}, 401
 
@@ -74,22 +71,56 @@ def update():
         database.session.add_all(categoriesProducts)
     database.session.commit()
 
-
-
     return {}, 200
 
 
 @application.route("/product_statistics", methods=["GET"])
 @jwt_required()
 def product_statistics():
-    claims = get_jwt_identity()
-    if claims["user_type"] != "owner":
+    claims = get_jwt()
+    if "user_type" not in claims or claims["user_type"] != "owner":
         return {"msg": "Missing Authorization Header"}, 401
-    return {}, 200
+    products = database.session.query(
+        Product.name.label("name"),
+        func.sum(
+            case([(Order.status == 'COMPLETE', OrderProduct.quantity)], else_=0)
+        ).label('sold'),
+        func.sum(
+            case([(Order.status == 'CREATED', OrderProduct.quantity), (Order.status == 'PENDING', OrderProduct.quantity)], else_=0)
+        ).label('waiting')
+    ).join(OrderProduct, OrderProduct.productId == Product.id).join(Order, Order.id == OrderProduct.orderId).group_by(
+        Product.name).all()
+    return {
+        "statistics": [
+            {
+                "name": product.name,
+                "sold": int(product[1]),
+                "waiting": int(product[2])
+            } for product in products
+        ]
+    }, 200
 
 
+@application.route("/category_statistics", methods=["GET"])
+@jwt_required()
+def category_statistics():
+    claims = get_jwt()
+    if "user_type" not in claims or claims["user_type"] != "owner":
+        return {"msg": "Missing Authorization Header"}, 401
+    categories = database.session.query(
+        Category.name.label("name"),
+        func.sum(
+            case([(Order.status == 'COMPLETE', OrderProduct.quantity)], else_=0)
+        ).label('sold'),
 
-
+    ).outerjoin(CategoryProduct, CategoryProduct.category == Category.id).outerjoin(Product, Product.id == CategoryProduct.product)\
+        .outerjoin(OrderProduct, OrderProduct.productId == Product.id).outerjoin(Order, Order.id == OrderProduct.orderId).group_by(
+        Category.name).order_by(desc("sold"), Category.name).all()
+    return {
+        "statistics": [
+            category.name for category in categories
+        ]
+    }, 200
 
 
 if __name__ == "__main__":
