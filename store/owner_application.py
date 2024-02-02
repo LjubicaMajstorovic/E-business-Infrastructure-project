@@ -1,14 +1,21 @@
-import csv, io
-from flask import Flask, request, Response
+import csv, io, os, requests
+from flask import Flask, request, Response, jsonify
 from configuration import Configuration
 from models import database, Product, Category, CategoryProduct, OrderProduct, Order
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
 from sqlalchemy import func, case, desc
+from requests import request as http
+import json
+
 
 application = Flask(__name__)
 application.config.from_object(Configuration)
 
 jwt = JWTManager(application)
+
+
+sparkIndicator = True
+
 
 
 @application.route("/update", methods=["POST"])
@@ -80,6 +87,8 @@ def product_statistics():
     claims = get_jwt()
     if "user_type" not in claims or claims["user_type"] != "owner":
         return {"msg": "Missing Authorization Header"}, 401
+    if sparkIndicator:
+        return jsonify(json.loads(http(method="get", url="http://sparkapp:5004/product_statistics").text)), 200
     products = database.session.query(
         Product.name.label("name"),
         func.sum(
@@ -107,6 +116,8 @@ def category_statistics():
     claims = get_jwt()
     if "user_type" not in claims or claims["user_type"] != "owner":
         return {"msg": "Missing Authorization Header"}, 401
+    if sparkIndicator:
+        return jsonify(json.loads(http(method="get", url="http://sparkapp:5004/category_statistics").text)), 200
     categories = database.session.query(
         Category.name.label("name"),
         func.sum(
