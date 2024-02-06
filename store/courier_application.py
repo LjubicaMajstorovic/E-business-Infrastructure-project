@@ -1,8 +1,8 @@
 from flask import Flask, request, Response
-from configuration import Configuration
+from configuration import Configuration, web3, owner, bytecode, abi
 from models import database, Product, Category, CategoryProduct, OrderProduct, Order
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
-from sqlalchemy import and_
+from web3.exceptions import ContractLogicError
 
 application = Flask(__name__)
 application.config.from_object(Configuration)
@@ -40,6 +40,23 @@ def pick_up_order():
     order = Order.query.filter(Order.id == request.json["id"]).first()
     if int(request.json["id"]) <= 0 or order is None or (order is not None and order.status != "CREATED"):
         return {"message": "Invalid order id."}, 400
+
+    if 'address' not in request.json or request.json['address'] == '':
+        return {'message': 'Missing address.'}, 400
+
+    if not web3.is_address(request.json['address']):
+        return {'message': 'Invalid address.'}, 400
+
+    try:
+        currContract = web3.eth.contract(address=order.contract, abi=abi, bytecode=bytecode)
+        transaction_hash = currContract.functions.addCourier(request.json['address']).transact({
+            "from": owner
+        })
+        receipt = web3.eth.wait_for_transaction_receipt(transaction_hash)
+    except ContractLogicError as error:
+        error = str(error)
+        error = error[error.find("revert ") + 7:]
+        return {"message": error}, 400
 
     order.status = "PENDING"
     database.session.commit()

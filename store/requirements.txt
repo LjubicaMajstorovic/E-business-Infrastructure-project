@@ -12,3 +12,4 @@ itsdangerous==2.0.1
 werkzeug==2.0.3
 pyspark==3.4.0
 requests==2.31.0
+web3==6.5.0
