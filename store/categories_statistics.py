@@ -55,33 +55,27 @@ orders = spark.read \
     .load()
 
 
-joined_df = (
-    categories
-    .join(category_products, categories["id"] == category_products["category"])
-    .join(products, products["id"] == category_products["product"])
-    .join(order_products, order_products["productId"] == products["id"])
-    .join(orders, orders["id"] == order_products["orderId"])
-)
+result_df = categories \
+    .join(category_products, categories['id'] == category_products['category'], 'left_outer') \
+    .join(products, products['id'] == category_products['product'], 'left_outer') \
+    .join(order_products, products['id'] == order_products['productId'], 'left_outer') \
+    .join(orders, orders['id'] == order_products['orderId'], 'left_outer') \
+    .groupBy(categories['name']) \
+    .agg(
+        F.sum(
+            F.when(orders['status'] == 'COMPLETE', order_products['quantity']).otherwise(0)
+        ).alias('sold')
+    ) \
+    .orderBy(F.desc('sold'), categories['name']).collect()
 
-# Define conditions for filtering and aggregation
-conditions = (F.col("Order.status") == "COMPLETE")
-quantity_sold = F.sum(F.when(conditions, order_products["quantity"]).otherwise(0)).alias("sold")
 
-# Perform aggregation and group by Category.name
-result_df = (
-    joined_df
-    .groupBy("Category.name")
-    .agg(quantity_sold)
-    .orderBy(quantity_sold.desc(), "Category.name")
-)
-
-# Collect results and convert to Python dictionary
 result = {
-    "statistics": [row["name"] for row in result_df.collect()]
+    "statistics": [row["name"] for row in result_df]
 }
 
 
-with open("/app/store/product_statistics.txt", "w") as file:
+
+with open("/app/store/category_statistics.txt", "w") as file:
     file.write(json.dumps(result))
 
 spark.stop()

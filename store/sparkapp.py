@@ -21,7 +21,7 @@ def product_statistics():
 
 @application.route("/category_statistics", methods=["GET"])
 def category_statistics():
-    os.environ["SPARK_APPLICATION_PYTHON_LOCATION"] = "/app/store/category_statistics.py"
+    os.environ["SPARK_APPLICATION_PYTHON_LOCATION"] = "/app/store/categories_statistics.py"
     os.environ[
         "SPARK_SUBMIT_ARGS"] = "--driver-class-path /app/store/mysql-connector-j-8.0.33.jar --jars /app/store/mysql-connector-j-8.0.33.jar"
 
