@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import sum as spark_sum, when
-import os, json
+import json
 
 builder = SparkSession.builder.appName("Product Statistics")
 

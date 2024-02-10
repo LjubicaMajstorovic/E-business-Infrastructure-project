@@ -1,8 +1,10 @@
-from flask import Flask, request, Response
+from flask import Flask, request
 from configuration import Configuration, web3, owner, bytecode, abi
-from models import database, Product, Category, CategoryProduct, OrderProduct, Order
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
+from models import database, Order
+from flask_jwt_extended import JWTManager, jwt_required, get_jwt
 from web3.exceptions import ContractLogicError
+from decorator import roleCheck
+
 
 application = Flask(__name__)
 application.config.from_object(Configuration)
@@ -11,11 +13,9 @@ jwt = JWTManager(application)
 
 
 @application.route("/orders_to_deliver", methods=["GET"])
+@roleCheck("courier")
 @jwt_required()
 def update():
-    claims = get_jwt()
-    if "user_type" not in claims or claims["user_type"] != "courier":
-        return {"msg": "Missing Authorization Header"}, 401
     orders = Order.query.filter(Order.status == "CREATED").all()
     return {
         "orders": [
@@ -28,11 +28,9 @@ def update():
 
 
 @application.route("/pick_up_order", methods=["POST"])
+@roleCheck("courier")
 @jwt_required()
 def pick_up_order():
-    claims = get_jwt()
-    if "user_type" not in claims or claims["user_type"] != "courier":
-        return {"msg": "Missing Authorization Header"}, 401
     if "id" not in request.json:
         return {"message": "Missing order id."}, 400
     if type(request.json["id"]) is not int:
@@ -48,11 +46,11 @@ def pick_up_order():
         return {'message': 'Invalid address.'}, 400
 
     try:
-        currContract = web3.eth.contract(address=order.contract, abi=abi, bytecode=bytecode)
-        transaction_hash = currContract.functions.addCourier(request.json['address']).transact({
+        contract = web3.eth.contract(address=order.contract, abi=abi, bytecode=bytecode)
+        hash_transaction = contract.functions.addCourier(request.json['address']).transact({
             "from": owner
         })
-        receipt = web3.eth.wait_for_transaction_receipt(transaction_hash)
+        receipt = web3.eth.wait_for_transaction_receipt(hash_transaction)
     except ContractLogicError as error:
         error = str(error)
         error = error[error.find("revert ") + 7:]

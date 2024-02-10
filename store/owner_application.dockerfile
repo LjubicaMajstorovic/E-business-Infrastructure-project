@@ -9,6 +9,7 @@ COPY ./models.py ./models.py
 COPY ./configuration.py ./configuration.py
 COPY ./solidity/output/Payment.bin ./solidity/output/Payment.bin
 COPY ./solidity/output/Payment.abi ./solidity/output/Payment.abi
+COPY ./decorator.py ./decorator.py
 
 RUN pip install -r ./requirements.txt
 

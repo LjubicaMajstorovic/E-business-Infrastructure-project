@@ -1,11 +1,10 @@
-import csv, io, os, requests
-from flask import Flask, request, Response, jsonify
+from flask import Flask, request, jsonify
 from configuration import Configuration
-from models import database, Product, Category, CategoryProduct, OrderProduct, Order
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
-from sqlalchemy import func, case, desc
+from models import database, Product, Category, CategoryProduct
+from flask_jwt_extended import JWTManager, jwt_required, get_jwt
 from requests import request as http
 import json
+from decorator import roleCheck
 
 
 application = Flask(__name__)
@@ -14,17 +13,12 @@ application.config.from_object(Configuration)
 jwt = JWTManager(application)
 
 
-sparkIndicator = True
-
 
 
 @application.route("/update", methods=["POST"])
+@roleCheck("owner")
 @jwt_required()
 def update():
-    claims = get_jwt()
-    if "user_type" not in claims or claims["user_type"] != "owner":
-        return {"msg": "Missing Authorization Header"}, 401
-
     if "file" not in request.files:
         return {"message": "Field file is missing."}, 400
 
@@ -82,56 +76,50 @@ def update():
 
 
 @application.route("/product_statistics", methods=["GET"])
+@roleCheck("owner")
 @jwt_required()
 def product_statistics():
-    claims = get_jwt()
-    if "user_type" not in claims or claims["user_type"] != "owner":
-        return {"msg": "Missing Authorization Header"}, 401
-    if sparkIndicator:
-        return jsonify(json.loads(http(method="get", url="http://sparkapp:5004/product_statistics").text)), 200
-    products = database.session.query(
-        Product.name.label("name"),
-        func.sum(
-            case([(Order.status == 'COMPLETE', OrderProduct.quantity)], else_=0)
-        ).label('sold'),
-        func.sum(
-            case([(Order.status == 'CREATED', OrderProduct.quantity), (Order.status == 'PENDING', OrderProduct.quantity)], else_=0)
-        ).label('waiting')
-    ).join(OrderProduct, OrderProduct.productId == Product.id).join(Order, Order.id == OrderProduct.orderId).group_by(
-        Product.name).all()
-    return {
-        "statistics": [
-            {
-                "name": product.name,
-                "sold": int(product[1]),
-                "waiting": int(product[2])
-            } for product in products
-        ]
-    }, 200
+    return jsonify(json.loads(http(method="get", url="http://sparkapp:5004/product_statistics").text)), 200
+    # products = database.session.query(
+    #     Product.name.label("name"),
+    #     func.sum(
+    #         case([(Order.status == 'COMPLETE', OrderProduct.quantity)], else_=0)
+    #     ).label('sold'),
+    #     func.sum(
+    #         case([(Order.status == 'CREATED', OrderProduct.quantity), (Order.status == 'PENDING', OrderProduct.quantity)], else_=0)
+    #     ).label('waiting')
+    # ).join(OrderProduct, OrderProduct.productId == Product.id).join(Order, Order.id == OrderProduct.orderId).group_by(
+    #     Product.name).all()
+    # return {
+    #     "statistics": [
+    #         {
+    #             "name": product.name,
+    #             "sold": int(product[1]),
+    #             "waiting": int(product[2])
+    #         } for product in products
+    #     ]
+    # }, 200
 
 
 @application.route("/category_statistics", methods=["GET"])
+@roleCheck("owner")
 @jwt_required()
 def category_statistics():
-    claims = get_jwt()
-    if "user_type" not in claims or claims["user_type"] != "owner":
-        return {"msg": "Missing Authorization Header"}, 401
-    if sparkIndicator:
-        return jsonify(json.loads(http(method="get", url="http://sparkapp:5004/category_statistics").text)), 200
-    categories = database.session.query(
-        Category.name.label("name"),
-        func.sum(
-            case([(Order.status == 'COMPLETE', OrderProduct.quantity)], else_=0)
-        ).label('sold'),
-
-    ).outerjoin(CategoryProduct, CategoryProduct.category == Category.id).outerjoin(Product, Product.id == CategoryProduct.product)\
-        .outerjoin(OrderProduct, OrderProduct.productId == Product.id).outerjoin(Order, Order.id == OrderProduct.orderId).group_by(
-        Category.name).order_by(desc("sold"), Category.name).all()
-    return {
-        "statistics": [
-            category.name for category in categories
-        ]
-    }, 200
+    return jsonify(json.loads(http(method="get", url="http://sparkapp:5004/category_statistics").text)), 200
+    # categories = database.session.query(
+    #     Category.name.label("name"),
+    #     func.sum(
+    #         case([(Order.status == 'COMPLETE', OrderProduct.quantity)], else_=0)
+    #     ).label('sold'),
+    #
+    # ).outerjoin(CategoryProduct, CategoryProduct.category == Category.id).outerjoin(Product, Product.id == CategoryProduct.product)\
+    #     .outerjoin(OrderProduct, OrderProduct.productId == Product.id).outerjoin(Order, Order.id == OrderProduct.orderId).group_by(
+    #     Category.name).order_by(desc("sold"), Category.name).all()
+    # return {
+    #     "statistics": [
+    #         category.name for category in categories
+    #     ]
+    # }, 200
 
 
 if __name__ == "__main__":

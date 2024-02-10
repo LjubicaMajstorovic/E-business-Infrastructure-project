@@ -1,12 +1,13 @@
-import csv
-from flask import Flask, request, Response
+from flask import Flask, request
 from configuration import Configuration, web3, owner, paymentContract, abi, bytecode
 from models import database, Product, Category, OrderProduct, Order, CategoryProduct
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
+from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity, get_jwt
 import json
 from web3.exceptions import ContractLogicError
 from web3 import Account
 from math import ceil
+from decorator import roleCheck
+
 
 application = Flask(__name__)
 application.config.from_object(Configuration)
@@ -15,12 +16,9 @@ jwt = JWTManager(application)
 
 
 @application.route('/search', methods=['GET'])
+@roleCheck("customer")
 @jwt_required()
 def search():
-    claims = get_jwt()
-    if "user_type" not in claims or claims["user_type"] != "customer":
-        return {"msg": "Missing Authorization Header"}, 401
-
     products = Product.query
     categories = Category.query
 
@@ -55,11 +53,9 @@ def search():
 
 
 @application.route('/order', methods=['POST'])
+@roleCheck("customer")
 @jwt_required()
 def order():
-    claims = get_jwt()
-    if "user_type" not in claims or claims["user_type"] != "customer":
-        return {"msg": "Missing Authorization Header"}, 401
     if "requests" not in request.json:
         return {"message": "Field requests is missing."}, 400
     requests = request.json["requests"]
@@ -90,10 +86,10 @@ def order():
     if not web3.is_address(request.json['address']):
         return {'message': 'Invalid address.'}, 400
 
-    transaction_hash = paymentContract.constructor(request.json['address'], ceil(price)).transact({
+    hash_transaction = paymentContract.constructor(request.json['address'], ceil(price)).transact({
         "from": owner,
     })
-    receipt = web3.eth.wait_for_transaction_receipt(transaction_hash)
+    receipt = web3.eth.wait_for_transaction_receipt(hash_transaction)
 
     order = Order(email=get_jwt_identity(), price=price, status="CREATED", contract=receipt.contractAddress)
     database.session.add(order)
@@ -106,12 +102,9 @@ def order():
     return {"id": order.id}, 200
 
 @application.route('/status', methods=['GET'])
+@roleCheck("customer")
 @jwt_required()
 def status():
-    claims = get_jwt()
-    if "user_type" not in claims or claims["user_type"] != "customer":
-        return {"msg": "Missing Authorization Header"}, 401
-
     #orders = Order.query.join(OrderProduct, OrderProduct.orderId == Order.id). \
     #    join(Product, Product.id == OrderProduct.productId).filter(Order.email == get_jwt_identity()).all()
 
@@ -131,11 +124,9 @@ def status():
 
 
 @application.route('/delivered', methods=['POST'])
+@roleCheck("customer")
 @jwt_required()
 def delivered():
-    claims = get_jwt()
-    if "user_type" not in claims or claims["user_type"] != "customer":
-        return {"msg": "Missing Authorization Header"}, 401
     if "id" not in request.json:
         return {"message": "Missing order id."}, 400
     if type(request.json["id"]) is not int:
@@ -154,7 +145,7 @@ def delivered():
 
     try:
         address = web3.to_checksum_address(keys["address"])
-        private_key = Account.decrypt(keys, passphrase).hex()
+        key = Account.decrypt(keys, passphrase).hex()
         contract = web3.eth.contract(address=order.contract, abi=abi, bytecode=bytecode)
         try:
             transaction = contract.functions.deliveryDone().build_transaction({
@@ -162,9 +153,9 @@ def delivered():
                 "nonce": web3.eth.get_transaction_count(address),
                 "gasPrice": web3.eth.gas_price
             })
-            signed_transaction = web3.eth.account.sign_transaction(transaction, private_key)
-            transaction_hash = web3.eth.send_raw_transaction(signed_transaction.rawTransaction)
-            receipt = web3.eth.wait_for_transaction_receipt(transaction_hash)
+            signed_transaction = web3.eth.account.sign_transaction(transaction, key)
+            hash_transaction = web3.eth.send_raw_transaction(signed_transaction.rawTransaction)
+            receipt = web3.eth.wait_for_transaction_receipt(hash_transaction)
         except ContractLogicError as error:
             error = str(error)
             error = error[error.find("revert ") + 7:]
@@ -179,11 +170,9 @@ def delivered():
 
 
 @application.route('/pay', methods=['POST'])
+@roleCheck("customer")
 @jwt_required()
 def pay():
-    claims = get_jwt()
-    if "user_type" not in claims or claims["user_type"] != "customer":
-        return {"msg": "Missing Authorization Header"}, 401
     if 'id' not in request.json:
         return {"message": "Missing order id."}, 400
     if type(request.json["id"]) is not int:
@@ -205,7 +194,7 @@ def pay():
 
     try:
         address = web3.to_checksum_address(keys["address"])
-        private_key = Account.decrypt(keys, passphrase).hex()
+        key = Account.decrypt(keys, passphrase).hex()
         contract = web3.eth.contract(address=order.contract, abi=abi, bytecode=bytecode)
 
         try:
@@ -215,9 +204,9 @@ def pay():
                 "nonce": web3.eth.get_transaction_count(address),
                 "gasPrice": web3.eth.gas_price
             })
-            signed_transaction = web3.eth.account.sign_transaction(transaction, private_key)
-            transaction_hash = web3.eth.send_raw_transaction(signed_transaction.rawTransaction)
-            receipt = web3.eth.wait_for_transaction_receipt(transaction_hash)
+            signed_transaction = web3.eth.account.sign_transaction(transaction, key)
+            hash_transacion = web3.eth.send_raw_transaction(signed_transaction.rawTransaction)
+            receipt = web3.eth.wait_for_transaction_receipt(hash_transacion)
         except ContractLogicError as error:
             if "Transfer already complete." not in str(error):
                 return {"message": f"Insufficient funds."}, 400
